@@ -333,11 +333,8 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
     </div>
   </div>
   <div class="capa-right">
-    <div class="capa-right-icon-wrap" style="border:4px solid ${hsColor};background:rgba(255,255,255,0.12)">
-      <div style="text-align:center">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:700;color:#0B1E33;line-height:1">${healthScore}</div>
-        <div style="font-size:9px;font-weight:600;color:rgba(11,30,51,0.55);text-transform:uppercase;letter-spacing:1px">health</div>
-      </div>
+    <div class="capa-right-icon-wrap" style="background:rgba(255,255,255,0.15);border:none">
+      <i class="fas fa-building-columns" style="font-size:28px;color:#0B1E33"></i>
     </div>
     <div class="capa-inst">
       <div class="capa-inst-label">Instituição</div>
