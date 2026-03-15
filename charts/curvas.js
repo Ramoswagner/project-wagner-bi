@@ -76,17 +76,47 @@
       });
 
       // ── Plugin: linha vertical "Hoje" ─────────────────────────
-      const now2 = new Date();
+      // Calcula a posição X por interpolação caso o mês atual
+      // não esteja nos dados (nenhuma atividade nesse mês).
+      const now2     = new Date();
       const todayKey2 = now2.getFullYear() + '-' + String(now2.getMonth() + 1).padStart(2, '0');
       const todayIdx2 = sortedMonths.indexOf(todayKey2);
+
+      // Índices vizinhos para interpolação quando o mês não existe
+      let beforeIdx2 = -1, afterIdx2 = -1;
+      if (todayIdx2 < 0) {
+        for (let i = 0; i < sortedMonths.length; i++) {
+          if (sortedMonths[i] < todayKey2) beforeIdx2 = i;
+          if (sortedMonths[i] > todayKey2 && afterIdx2 < 0) afterIdx2 = i;
+        }
+      }
 
       const todayLinePlugin = {
         id: 'todayLine',
         afterDraw(chart) {
-          if (todayIdx2 < 0) return;
           const meta = chart.getDatasetMeta(0);
-          if (!meta.data[todayIdx2]) return;
-          const x   = meta.data[todayIdx2].x;
+          let x = null;
+
+          if (todayIdx2 >= 0 && meta.data[todayIdx2]) {
+            // Mês exato encontrado
+            x = meta.data[todayIdx2].x;
+          } else if (beforeIdx2 >= 0 && afterIdx2 >= 0 && meta.data[beforeIdx2] && meta.data[afterIdx2]) {
+            // Interpola: posição proporcional entre os dois meses vizinhos
+            const xA = meta.data[beforeIdx2].x;
+            const xB = meta.data[afterIdx2].x;
+            // Quantos meses entre A e B, e quantos desde A até hoje
+            const mA = new Date(sortedMonths[beforeIdx2].replace('-', '/') + '/01');
+            const mB = new Date(sortedMonths[afterIdx2].replace('-', '/') + '/01');
+            const mT = new Date(now2.getFullYear(), now2.getMonth(), 1);
+            const ratio = (mT - mA) / (mB - mA);
+            x = xA + (xB - xA) * ratio;
+          } else if (beforeIdx2 >= 0 && meta.data[beforeIdx2]) {
+            // Hoje está depois do último mês — cola na borda direita
+            x = meta.data[beforeIdx2].x;
+          }
+
+          if (x === null) return;
+
           const ctx2 = chart.ctx;
           const { top, bottom } = chart.chartArea;
           ctx2.save();
@@ -97,11 +127,10 @@
           ctx2.moveTo(x, top);
           ctx2.lineTo(x, bottom);
           ctx2.stroke();
-          // Label "Hoje"
           ctx2.setLineDash([]);
-          ctx2.fillStyle    = '#E74C3C';
-          ctx2.font         = '600 10px Inter, sans-serif';
-          ctx2.textAlign    = 'center';
+          ctx2.fillStyle = '#E74C3C';
+          ctx2.font      = '600 10px Inter, sans-serif';
+          ctx2.textAlign = 'center';
           ctx2.fillText('Hoje', x, top - 4);
           ctx2.restore();
         }
