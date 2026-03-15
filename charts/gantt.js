@@ -1,12 +1,34 @@
 // ═══════════════════════════════════════════════════════════════
 //  MÓDULO: Gantt (Planejado vs Real) — estilo MS Project
-//  Cabeçalho duplo: Meses (linha 1) + Semanas (linha 2)
+//  Cabeçalho duplo:
+//    Linha 1 — Meses (span proporcional)
+//    Linha 2 — Dias da semana: Seg Ter Qua Qui Sex Sáb Dom
 //  Linha de Hoje: posicionada pelo dia exato (meia-noite)
+//  Escala: cada dia ocupa a mesma largura (pixels por dia)
 //  Slots: #ganttInner + #tableBodyGantt
 // ═══════════════════════════════════════════════════════════════
 (function () {
 
-  const LABEL_W = 200; // px largura da coluna de labels
+  const LABEL_W  = 200;    // px — largura da coluna de labels
+  const PX_DAY   = 28;     // px — largura de cada dia
+  const ROW_H    = 52;     // px — altura de cada linha de atividade
+  const HDR_H1   = 26;     // px — altura header linha 1 (meses)
+  const HDR_H2   = 22;     // px — altura header linha 2 (dias)
+
+  const DIAS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const DIAS_ABBR = ['D','S','T','Q','Q','S','S']; // 1 char p/ dias muito estreitos
+
+  // Normaliza data para meia-noite local
+  function midnight(d) {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n;
+  }
+
+  // Dias entre duas datas (inteiros)
+  function daysBetween(a, b) {
+    return Math.round((midnight(b) - midnight(a)) / 864e5);
+  }
 
   ChartRegistry.register({
     id: 'gantt',
@@ -19,26 +41,6 @@
 
     destroy() {}
   });
-
-  // ── UTILS ─────────────────────────────────────────────────────
-  // Retorna segunda-feira da semana que contém a data d
-  function weekStart(d) {
-    const day = new Date(d);
-    const dow = day.getDay(); // 0=dom
-    const diff = (dow === 0) ? -6 : 1 - dow;
-    day.setDate(day.getDate() + diff);
-    day.setHours(0, 0, 0, 0);
-    return day;
-  }
-
-  // Número ISO da semana do ano
-  function isoWeek(d) {
-    const tmp = new Date(d);
-    tmp.setHours(0, 0, 0, 0);
-    tmp.setDate(tmp.getDate() + 3 - (tmp.getDay() + 6) % 7);
-    const w1 = new Date(tmp.getFullYear(), 0, 4);
-    return 1 + Math.round(((tmp - w1) / 864e5 - 3 + (w1.getDay() + 6) % 7) / 7);
-  }
 
   // ── GANTT PRINCIPAL ──────────────────────────────────────────
   function renderGantt(rows) {
@@ -66,127 +68,147 @@
       return;
     }
 
-    // Normaliza para meia-noite e adiciona margens
-    minD = weekStart(new Date(minD.getTime() - 7 * 864e5)); // início da semana - 1 semana
-    maxD = new Date(maxD);
-    maxD.setHours(0, 0, 0, 0);
-    maxD = new Date(maxD.getTime() + 14 * 864e5); // + 2 semanas
+    // Ancora minD na segunda-feira da semana anterior
+    minD = midnight(minD);
+    while (minD.getDay() !== 1) minD = new Date(minD.getTime() - 864e5); // recua até seg
+    minD = new Date(minD.getTime() - 7 * 864e5); // mais 1 semana de margem
 
-    const totalMs = maxD - minD;
+    maxD = midnight(maxD);
+    maxD = new Date(maxD.getTime() + 14 * 864e5); // + 2 semanas de margem
 
-    // Hoje normalizado para meia-noite (posição exata no dia)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const totalDays = daysBetween(minD, maxD);
+    const today     = midnight(new Date());
 
-    // toP: data → percentual 0..100 dentro da área de barras
-    const toP = d => {
-      const norm = new Date(d);
-      norm.setHours(0, 0, 0, 0);
-      return (norm - minD) / totalMs * 100;
-    };
+    // Converte data → pixels a partir de LABEL_W
+    const toX = d => daysBetween(minD, midnight(d)) * PX_DAY;
+    const todayX = toX(today);
+    const totalW  = LABEL_W + totalDays * PX_DAY;
 
-    const todayP = toP(today);
+    // ── LINHA 1: MESES ─────────────────────────────────────────
+    let monthHtml = `<div style="display:flex;min-width:${totalW}px;height:${HDR_H1}px;background:#0B1E33;position:sticky;top:0;z-index:4">
+      <div style="width:${LABEL_W}px;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.15)"></div>
+      <div style="position:relative;flex:1">`;
 
-    // ── Linha 1: MESES ────────────────────────────────────────
-    const months = [];
-    let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
-    while (cur <= maxD) {
-      months.push({
-        label: cur.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-               .replace(' de ', ' '),
-        pStart: toP(cur),
-        d: new Date(cur)
-      });
-      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    // Itera meses dentro do span
+    let mCur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    while (mCur <= maxD) {
+      const mStart = mCur < minD ? minD : mCur;
+      const mEnd   = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 0); // último dia do mês
+      const mEndClipped = mEnd > maxD ? maxD : mEnd;
+      const x    = toX(mStart);
+      const wPx  = daysBetween(mStart, mEndClipped) * PX_DAY + PX_DAY; // +1 dia inclusivo
+      const label = mCur.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace(' de ','·');
+      monthHtml += `<div style="position:absolute;left:${x}px;width:${wPx}px;height:${HDR_H1}px;display:flex;align-items:center;padding:0 6px;border-left:1px solid rgba(255,255,255,0.12);font-size:11px;font-weight:700;color:rgba(255,255,255,0.90);overflow:hidden;white-space:nowrap;letter-spacing:0.3px">${label}</div>`;
+      mCur = new Date(mCur.getFullYear(), mCur.getMonth() + 1, 1);
+    }
+    monthHtml += '</div></div>';
+
+    // ── LINHA 2: DIAS DA SEMANA ────────────────────────────────
+    let dayHtml = `<div style="display:flex;min-width:${totalW}px;height:${HDR_H2}px;background:#f0f2f7;border-bottom:2px solid #ccd0de;position:sticky;top:${HDR_H1}px;z-index:3">
+      <div style="width:${LABEL_W}px;flex-shrink:0;border-right:1px solid #ccd0de"></div>
+      <div style="position:relative;flex:1">`;
+
+    // Badge HOJE dentro do header dias
+    if (todayX >= 0 && todayX <= totalDays * PX_DAY) {
+      const cx = todayX + PX_DAY / 2;
+      dayHtml += `<div style="position:absolute;left:${cx}px;top:0;bottom:0;z-index:2;pointer-events:none">
+        <div style="position:absolute;top:50%;left:0;transform:translate(-50%,-50%);background:#E74C3C;color:white;font-size:8.5px;font-weight:700;padding:1px 4px;border-radius:3px;white-space:nowrap;z-index:10">HOJE</div>
+      </div>`;
     }
 
-    let monthRow = `<div style="display:flex;padding-left:${LABEL_W}px;border-bottom:1px solid var(--gray-200);background:var(--primary);position:relative">`;
-    for (let i = 0; i < months.length; i++) {
-      const pEnd = i < months.length - 1 ? months[i + 1].pStart : 100;
-      const w    = Math.max(0, pEnd - months[i].pStart);
-      monthRow  += `<div style="flex:${w} 0 0%;text-align:center;font-size:11px;font-weight:700;color:rgba(255,255,255,0.90);padding:5px 2px;border-left:1px solid rgba(255,255,255,0.15);white-space:nowrap;overflow:hidden;letter-spacing:0.3px">${months[i].label}</div>`;
+    // Cada dia
+    let dCur = new Date(minD);
+    for (let di = 0; di < totalDays; di++) {
+      const dow   = dCur.getDay(); // 0=dom
+      const x     = di * PX_DAY;
+      const isSat = dow === 6;
+      const isSun = dow === 0;
+      const isWknd = isSat || isSun;
+      const isToday = daysBetween(minD, dCur) === daysBetween(minD, today);
+
+      // Fundo: weekend mais escuro, hoje em vermelho suave
+      const bg = isToday
+        ? 'rgba(231,76,60,0.12)'
+        : isWknd
+        ? 'rgba(0,0,0,0.06)'
+        : 'transparent';
+
+      // Borda esquerda: segunda-feira marca início de semana
+      const borderL = dow === 1 ? '1.5px solid #aab0c4' : '1px solid #dde0ea';
+
+      dayHtml += `<div style="position:absolute;left:${x}px;width:${PX_DAY}px;height:${HDR_H2}px;background:${bg};border-left:${borderL};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:${isToday?'700':'600'};color:${isToday?'#C62828':isWknd?'#9CA3AF':'#6C757D'};overflow:hidden" title="${dCur.toLocaleDateString('pt-BR')}">${DIAS[dow].slice(0,3)}</div>`;
+
+      dCur = new Date(dCur.getTime() + 864e5);
     }
-    monthRow += '</div>';
+    dayHtml += '</div></div>';
 
-    // ── Linha 2: SEMANAS (com badge HOJE embutido) ────────────
-    const weeks = [];
-    let wCur = new Date(weekStart(minD));
-    while (wCur <= maxD) {
-      weeks.push({
-        num:    isoWeek(wCur),
-        pStart: toP(wCur),
-        d:      new Date(wCur)
-      });
-      wCur = new Date(wCur.getTime() + 7 * 864e5);
-    }
-
-    // Badge "HOJE" dentro da linha de semanas (não externo — evita overflow-clip)
-    const todayBadgeHtml = todayP >= 0 && todayP <= 100
-      ? `<div style="position:absolute;left:calc(${LABEL_W}px + ${todayP}%);top:0;bottom:0;pointer-events:none;z-index:2">
-           <div style="position:absolute;top:50%;left:0;transform:translate(-50%,-50%);background:#E74C3C;color:white;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;white-space:nowrap">HOJE</div>
-         </div>`
-      : '';
-
-    let weekRow = `<div style="display:flex;padding-left:${LABEL_W}px;border-bottom:2px solid var(--gray-200);background:#f0f2f7;position:relative">`;
-    weekRow += todayBadgeHtml;
-    for (let i = 0; i < weeks.length; i++) {
-      const pEnd = i < weeks.length - 1 ? weeks[i + 1].pStart : 100;
-      const w    = Math.max(0, pEnd - weeks[i].pStart);
-      const dd   = weeks[i].d;
-      const dayLabel = dd.getDate() + '/' + (dd.getMonth() + 1);
-      weekRow   += `<div style="flex:${w} 0 0%;text-align:center;font-size:9.5px;font-weight:600;color:var(--gray-600);padding:3px 1px;border-left:1px solid var(--gray-200);white-space:nowrap;overflow:hidden" title="Semana ${weeks[i].num} · ${dayLabel}">S${weeks[i].num}</div>`;
-    }
-    weekRow += '</div>';
-
-    // ── Linhas de atividade ───────────────────────────────────
+    // ── LINHAS DE ATIVIDADE ────────────────────────────────────
     let rowsHtml = '';
     rows.forEach((r, idx) => {
-      const plannedStart = window.parseDateStr(r.inP);
-      const plannedEnd   = window.parseDateStr(r.fimP);
-      const realStart    = window.parseDateStr(r.inR);
-      const realEnd      = window.parseDateStr(r.fimR) || (r.prog > 0 && r.prog < 100 ? today : null);
+      const pStart = window.parseDateStr(r.inP);
+      const pEnd   = window.parseDateStr(r.fimP);
+      const rStart = window.parseDateStr(r.inR);
+      const rEnd   = window.parseDateStr(r.fimR) || (r.prog > 0 && r.prog < 100 ? today : null);
 
       let bars = '';
 
+      // Faixas de fim de semana na área de barras
+      let bgStripes = '';
+      let dCurBg = new Date(minD);
+      for (let di = 0; di < totalDays; di++) {
+        const dow = dCurBg.getDay();
+        if (dow === 0 || dow === 6) {
+          bgStripes += `<div style="position:absolute;left:${di*PX_DAY}px;width:${PX_DAY}px;top:0;bottom:0;background:rgba(0,0,0,0.035)"></div>`;
+        }
+        // Separador de semana (segunda-feira)
+        if (dow === 1) {
+          bgStripes += `<div style="position:absolute;left:${di*PX_DAY}px;width:1px;top:0;bottom:0;background:rgba(0,0,0,0.08)"></div>`;
+        }
+        dCurBg = new Date(dCurBg.getTime() + 864e5);
+      }
+
       // Barra planejada
-      if (plannedStart && plannedEnd) {
-        const left  = Math.max(0, toP(plannedStart));
-        const width = Math.max(0.4, toP(plannedEnd) - left);
-        bars += `<div class="gantt-bar gantt-bar-planned" style="left:${left}%;width:${width}%;background:rgba(11,30,51,0.15);border:1.5px solid rgba(11,30,51,0.35)" title="Previsto: ${r.inP} → ${r.fimP}"></div>`;
+      if (pStart && pEnd) {
+        const left  = Math.max(0, toX(pStart));
+        const right = toX(new Date(pEnd.getTime() + 864e5)); // inclusivo
+        const w     = Math.max(PX_DAY * 0.5, right - left);
+        bars += `<div class="gantt-bar gantt-bar-planned" style="left:${left}px;width:${w}px;background:rgba(11,30,51,0.15);border:1.5px solid rgba(11,30,51,0.35)" title="Previsto: ${r.inP} → ${r.fimP}"></div>`;
       }
 
       // Barra real
-      if (realStart) {
-        const rEnd  = realEnd || today;
-        const left  = Math.max(0, toP(realStart));
-        const width = Math.max(0.4, toP(rEnd) - left);
-        const isLate = plannedEnd && rEnd > plannedEnd;
+      if (rStart) {
+        const rEndD  = rEnd || today;
+        const left   = Math.max(0, toX(rStart));
+        const right  = toX(new Date(rEndD.getTime() + 864e5));
+        const w      = Math.max(PX_DAY * 0.5, right - left);
+        const isLate = pEnd && rEndD > pEnd;
         const color  = r.prog === 100 ? '#1565C0' : isLate ? '#C62828' : '#0B1E33';
-        bars += `<div class="gantt-bar gantt-bar-real" style="left:${left}%;width:${width}%;background:${color};opacity:0.88" title="Real: ${r.inR} → ${r.fimR || 'em andamento'} · ${r.prog}%"></div>`;
+        bars += `<div class="gantt-bar gantt-bar-real" style="left:${left}px;width:${w}px;background:${color};opacity:0.88" title="Real: ${r.inR} → ${r.fimR||'em andamento'} · ${r.prog}%"></div>`;
       }
 
-      // Linha de hoje (dentro de cada barra)
-      if (todayP >= 0 && todayP <= 100) {
-        bars += `<div class="gantt-today-line" style="left:${todayP}%"></div>`;
+      // Linha de hoje
+      if (todayX >= 0 && todayX <= totalDays * PX_DAY) {
+        bars += `<div style="position:absolute;left:${todayX + PX_DAY/2}px;top:0;bottom:0;width:2px;background:#E74C3C;opacity:0.7;z-index:2"></div>`;
       }
 
-      // Zebra
-      const rowBg = idx % 2 === 0 ? '' : 'background:rgba(0,0,0,0.018)';
-      const stColor = r.st === 'Concluído' ? '#1565C0' : r.st === 'Atrasado' ? '#C62828' : r.st === 'Em dia' ? '#2E7D32' : '#E65100';
+      const rowBg    = idx % 2 === 0 ? '#fff' : 'rgba(0,0,0,0.018)';
+      const stColor  = r.st === 'Concluído' ? '#1565C0' : r.st === 'Atrasado' ? '#C62828' : r.st === 'Em dia' ? '#2E7D32' : '#E65100';
 
-      rowsHtml += `<div class="gantt-row" style="${rowBg}">
-        <div class="gantt-row-label" style="width:${LABEL_W}px" title="${r.atv}">
+      rowsHtml += `<div style="display:flex;min-width:${totalW}px;height:${ROW_H}px;background:${rowBg};border-bottom:1px solid #f0f2f5">
+        <div style="width:${LABEL_W}px;flex-shrink:0;padding:8px 12px;font-size:12px;font-weight:500;color:#2D3433;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid #e0e4ec;display:flex;flex-direction:column;justify-content:center" title="${r.atv}">
           ${r.atv}
-          <small style="color:${stColor}">${r.resp} · ${r.st}</small>
+          <small style="font-size:10.5px;color:${stColor};font-weight:600;margin-top:2px">${r.resp} · ${r.st}</small>
         </div>
-        <div class="gantt-bars-area">${bars}</div>
+        <div style="position:relative;flex:1;height:${ROW_H}px;overflow:hidden">
+          ${bgStripes}${bars}
+        </div>
       </div>`;
     });
 
-    container.innerHTML = monthRow + weekRow + rowsHtml;
+    container.innerHTML = monthHtml + dayHtml + rowsHtml;
   }
 
-  // ── TABELA COMPACTA NA ABA GANTT ────────────────────────────
+  // ── TABELA COMPACTA NA ABA GANTT ─────────────────────────────
   function renderGanttTable(rows) {
     const tbody = document.getElementById('tableBodyGantt');
     if (!tbody) return;
@@ -201,7 +223,7 @@
         <td><strong>${r.atv}</strong></td>
         <td>${r.resp}</td>
         <td>${r.inP}</td><td>${r.fimP}</td>
-        <td>${r.inR}</td><td>${r.fimR}</td>
+        <td>${r.inR||'—'}</td><td>${r.fimR||'—'}</td>
         <td><div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width:${r.prog}%"></div></div><span style="font-size:12px;font-weight:600;min-width:28px">${r.prog}%</span></div></td>
         <td><span class="status-badge ${sc}"><i class="fas ${si}"></i> ${r.st}</span></td>
       </tr>`;
