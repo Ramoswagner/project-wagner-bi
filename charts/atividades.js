@@ -71,9 +71,40 @@
         dataDone.push(cumDone);
       });
 
+      // ── Plugin: linha vertical "Hoje" ─────────────────────────
+      const todayLabel = new Date().toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+
+      const todayLinePlugin = {
+        id: 'todayLineAtv',
+        afterDraw(chart) {
+          const idx = chart.data.labels.indexOf(todayLabel);
+          if (idx < 0) return;
+          const meta = chart.getDatasetMeta(0);
+          if (!meta.data[idx]) return;
+          const x    = meta.data[idx].x;
+          const ctx2 = chart.ctx;
+          const { top, bottom } = chart.chartArea;
+          ctx2.save();
+          ctx2.beginPath();
+          ctx2.setLineDash([5, 4]);
+          ctx2.strokeStyle = 'rgba(231,76,60,0.75)';
+          ctx2.lineWidth   = 1.5;
+          ctx2.moveTo(x, top);
+          ctx2.lineTo(x, bottom);
+          ctx2.stroke();
+          ctx2.setLineDash([]);
+          ctx2.fillStyle = '#E74C3C';
+          ctx2.font      = '600 10px Inter, sans-serif';
+          ctx2.textAlign = 'center';
+          ctx2.fillText('Hoje', x, top - 4);
+          ctx2.restore();
+        }
+      };
+
       // ── Chart.js ──────────────────────────────────────────────
       _instance = new Chart(canvas.getContext('2d'), {
         type: 'line',
+        plugins: [todayLinePlugin],
         data: {
           labels,
           datasets: [
