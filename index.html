@@ -587,7 +587,16 @@
 
             <!-- ─── Linha 2: Curva S — largura total ─── -->
 
-            <!-- Gráfico 4: Curva S → charts/curvas.js -->
+            <!-- Gráfico 5: Atividades Planejado Concluir × Concluído → charts/atividades.js -->
+            <div class="card chart-col-3">
+                <div class="card-header">
+                    <span class="card-title"><i class="fas fa-chart-area"></i> Atividades — Planejado Concluir × Concluído</span>
+                    <span class="badge">Acumulado por mês</span>
+                </div>
+                <div class="chart-container" style="height:220px"><canvas id="atividadesChart"></canvas></div>
+            </div>
+
+            <!-- Gráfico 6: Curva S → charts/curvas.js -->
             <div class="card chart-col-3">
                 <div class="card-header">
                     <span class="card-title"><i class="fas fa-chart-area"></i> Curva S — Custo Acumulado Planejado × Realizado</span>
@@ -736,6 +745,7 @@ window.closeAINarrative    = window.closeAINarrative    || function() { document
 <script src="charts/resp.js"></script>
 <script src="charts/gantt.js"></script>
 <script src="charts/curvas.js"></script>
+<script src="charts/atividades.js"></script>
 <script src="charts/risktable.js"></script>
 <script src="charts/costbyresp.js"></script>
 
