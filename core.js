@@ -280,6 +280,15 @@ function processData(csv) {
   const rb = document.getElementById('respBadge');
   if (rb) { const n=Object.keys(respMap).length; rb.textContent=`${n} pessoa${n!==1?'s':''}`; }
 
+  // Badge de risco
+  const riskB = document.getElementById('riskBadge');
+  if (riskB) {
+    const n = actRows.filter(r => r.st === 'Atrasado' || r.cR > r.cP).length;
+    riskB.textContent = n > 0 ? `${n} crítica${n !== 1 ? 's' : ''}` : 'Sem riscos';
+    riskB.style.background = n > 0 ? 'rgba(198,40,40,0.12)' : '';
+    riskB.style.color      = n > 0 ? '#C62828' : '';
+  }
+
   // Insights
   const sg = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
   sg('percentualGasto',   usedPct+'% utilizado');
