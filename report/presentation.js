@@ -25,6 +25,10 @@ window.generatePPTX = function () {
   const hoje     = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   const vpct     = parseFloat(d.varPct);
   const usedN    = parseFloat(d.usedPct);
+  const cpi      = d.cpi || 0;
+  const eac      = d.eac || d.totalPrev;
+  const healthScore = d.healthScore || 0;
+  const hsColor  = healthScore >= 70 ? '#27AE60' : healthScore >= 40 ? '#F39C12' : '#E74C3C';
   const fmoney   = window.fmoney;
 
   // ── Linhas da tabela de atividades ─────────────────────────
@@ -246,7 +250,12 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
     </div>
   </div>
   <div class="capa-right">
-    <div class="capa-right-icon-wrap"><i class="fas fa-building-columns"></i></div>
+    <div class="capa-right-icon-wrap" style="border:4px solid ${hsColor};background:rgba(255,255,255,0.12)">
+      <div style="text-align:center">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:700;color:#0B1E33;line-height:1">${healthScore}</div>
+        <div style="font-size:9px;font-weight:600;color:rgba(11,30,51,0.55);text-transform:uppercase;letter-spacing:1px">health</div>
+      </div>
+    </div>
     <div class="capa-inst">
       <div class="capa-inst-label">Instituição</div>
       <div class="capa-inst-name">${pi.instituicao || '—'}</div>
@@ -274,15 +283,15 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
       <div class="kpi-val">${fmoney(d.totalReal)}</div>
       <div class="kpi-lbl">Custo Real Acumulado</div>
     </div>
-    <div class="kpi-box" style="--c:#1565C0;--csoft:#E3F2FD">
-      <div class="kpi-icon-pdf"><i class="fas fa-chart-pie"></i></div>
-      <div class="kpi-val">${d.avgProg}%</div>
-      <div class="kpi-lbl">Progresso Médio</div>
+    <div class="kpi-box" style="--c:${cpi>=1?'#2E7D32':cpi>=0.8?'#E65100':'#C62828'};--csoft:${cpi>=1?'#E8F5E9':cpi>=0.8?'#FFF3E0':'#FFEBEE'}">
+      <div class="kpi-icon-pdf"><i class="fas fa-chart-line"></i></div>
+      <div class="kpi-val">CPI ${cpi > 0 ? cpi.toFixed(2) : '—'}</div>
+      <div class="kpi-lbl">Índice de Desempenho de Custo</div>
     </div>
     <div class="kpi-box" style="--c:#E65100;--csoft:#FFF3E0">
-      <div class="kpi-icon-pdf"><i class="fas fa-list-check"></i></div>
-      <div class="kpi-val">${d.total}</div>
-      <div class="kpi-lbl">Total de Atividades</div>
+      <div class="kpi-icon-pdf"><i class="fas fa-calculator"></i></div>
+      <div class="kpi-val">${eac > 0 ? fmoney(Math.round(eac)) : '—'}</div>
+      <div class="kpi-lbl">EAC — Estimativa ao Término</div>
     </div>
   </div>
   <div class="kpi-sub-row">
@@ -293,8 +302,8 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
   </div>
   <div class="var-band">
     <i class="fas fa-${vpct > 0 ? 'arrow-trend-up' : 'arrow-trend-down'}" style="color:${vpct > 0 ? '#C62828' : '#2E7D32'}"></i>
-    <span style="font-weight:700;color:${vpct > 0 ? '#C62828' : '#2E7D32'}">Variação orçamentária: ${Math.abs(d.varPct)}% ${vpct > 0 ? 'acima' : 'abaixo'} do previsto</span>
-    <span style="margin-left:auto;color:#9CA3AF;font-size:10.5px">${usedN}% do orçamento utilizado</span>
+    <span style="font-weight:700;color:${vpct > 0 ? '#C62828' : '#2E7D32'}">Variação: ${Math.abs(d.varPct)}% ${vpct > 0 ? 'acima' : 'abaixo'} do previsto</span>
+    <span style="margin-left:auto;color:#9CA3AF;font-size:10.5px">Health Score: ${healthScore}/100 &nbsp;·&nbsp; EAC: ${fmoney(Math.round(eac))}</span>
   </div>
   <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">2 / 6</div></div>
 </div>
@@ -363,7 +372,7 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
   <div class="risk-grid">
     <div class="rbox" style="--c:#C62828;--csoft:#FFEBEE">
       <div class="rbox-head"><div class="rbox-ico"><i class="fas fa-triangle-exclamation"></i></div><div class="rbox-title">Riscos Financeiros</div></div>
-      <div class="rbox-text">${d.sobreOrcamento} atividade${d.sobreOrcamento !== 1 ? 's' : ''} com custo real acima do previsto. Revisão orçamentária ${d.sobreOrcamento > 0 ? '<strong>recomendada</strong>' : 'não necessária no momento'}.</div>
+      <div class="rbox-text">${d.sobreOrcamento} atividade${d.sobreOrcamento !== 1 ? 's' : ''} com custo real acima do previsto. CPI: <strong>${cpi > 0 ? cpi.toFixed(2) : '—'}</strong> ${cpi < 1 && cpi > 0 ? '— revisão orçamentária recomendada.' : cpi >= 1 ? '— dentro do esperado.' : ''}</div>
     </div>
     <div class="rbox" style="--c:#E65100;--csoft:#FFF3E0">
       <div class="rbox-head"><div class="rbox-ico"><i class="fas fa-calendar-xmark"></i></div><div class="rbox-title">Riscos de Prazo</div></div>
