@@ -69,6 +69,89 @@ window.generatePPTX = function () {
     </div>`;
   };
 
+  // ── Gantt para o slide ──────────────────────────────────────
+  function buildGanttSlide(rows) {
+    const maxRows = Math.min(rows.length, 12);
+    const visible = rows.slice(0, maxRows);
+    const parseD  = s => {
+      if (!s || s === '—') return null;
+      const p = s.split('/');
+      if (p.length === 3) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+      const d = new Date(s); return isNaN(d) ? null : d;
+    };
+
+    let minD = null, maxD = null;
+    visible.forEach(r => {
+      [r.inP, r.fimP, r.inR, r.fimR].map(parseD).filter(Boolean).forEach(d => {
+        if (!minD || d < minD) minD = new Date(d);
+        if (!maxD || d > maxD) maxD = new Date(d);
+      });
+    });
+
+    if (!minD || !maxD) return '<p style="font-size:11px;color:#aaa;text-align:center;padding:20px 0">Sem datas nas atividades</p>';
+
+    minD = new Date(minD.getTime() - 5 * 864e5);
+    maxD = new Date(maxD.getTime() + 5 * 864e5);
+    const span = maxD - minD;
+    const toP  = d => Math.max(0, Math.min(100, (d - minD) / span * 100));
+
+    const months = [];
+    let cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    while (cur <= maxD) {
+      months.push({ label: cur.toLocaleDateString('pt-BR', { month: 'short' }), p: toP(cur) });
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+
+    const todayP = toP(new Date());
+    const rowH   = 28;
+    const labelW = 160;
+
+    let mHeader = `<div style="display:flex;margin-left:${labelW}px;border-bottom:1px solid #ddd8ca;background:#f5f2ec">`;
+    for (let i = 0; i < months.length; i++) {
+      const nextP = i < months.length - 1 ? months[i + 1].p : 100;
+      const w     = Math.max(0, nextP - months[i].p);
+      mHeader += `<div style="flex:${w} 0 0%;text-align:center;font-size:8.5px;font-weight:700;color:#6C757D;padding:4px 0;border-left:1px solid #ddd8ca;text-transform:uppercase;letter-spacing:0.5px">${months[i].label}</div>`;
+    }
+    mHeader += '</div>';
+
+    let rowsHtml = '';
+    visible.forEach((r, idx) => {
+      const pStart = parseD(r.inP), pEnd = parseD(r.fimP);
+      const rStart = parseD(r.inR), rEnd = parseD(r.fimR) || (r.prog > 0 && r.prog < 100 ? new Date() : null);
+      const rowBg  = idx % 2 === 0 ? '#fff' : '#f9f7f3';
+      const stCl   = r.st === 'Concluído' ? '#1565C0' : r.st === 'Atrasado' ? '#C62828' : r.st === 'Em dia' ? '#2E7D32' : '#E65100';
+
+      let bars = `<div style="position:relative;flex:1;height:${rowH}px">`;
+      if (pStart && pEnd) {
+        const l = toP(pStart), w = Math.max(0.5, toP(pEnd) - l);
+        bars += `<div style="position:absolute;top:8px;height:6px;left:${l}%;width:${w}%;background:rgba(11,30,51,0.18);border:1px solid rgba(11,30,51,0.35);border-radius:2px"></div>`;
+      }
+      if (rStart) {
+        const rE = rEnd || new Date();
+        const l  = toP(rStart), w = Math.max(0.5, toP(rE) - l);
+        const isLate = pEnd && rE > pEnd;
+        const col = r.prog === 100 ? '#1565C0' : isLate ? '#C62828' : '#0B1E33';
+        bars += `<div style="position:absolute;top:16px;height:6px;left:${l}%;width:${w}%;background:${col};opacity:0.9;border-radius:2px"></div>`;
+      }
+      if (todayP >= 0 && todayP <= 100) {
+        bars += `<div style="position:absolute;top:0;bottom:0;left:${todayP}%;width:1.5px;background:#E74C3C;opacity:0.6"></div>`;
+      }
+      bars += '</div>';
+
+      rowsHtml += `<div style="display:flex;align-items:center;background:${rowBg};border-bottom:1px solid #ede9df;min-height:${rowH}px">
+        <div style="width:${labelW}px;flex-shrink:0;padding:0 8px;font-size:9.5px;color:#1A1F1E;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid #ddd8ca" title="${r.atv}">
+          ${r.atv}<br><span style="font-size:8px;color:${stCl};font-weight:700">${r.st}</span>
+        </div>
+        ${bars}
+      </div>`;
+    });
+
+    if (rows.length > maxRows)
+      rowsHtml += `<div style="text-align:center;font-size:8.5px;color:#aaa;padding:4px">* Exibindo ${maxRows} de ${rows.length} atividades</div>`;
+
+    return `<div style="border:1px solid #ddd8ca;border-radius:6px;overflow:hidden;font-family:'Inter',sans-serif">${mHeader}${rowsHtml}</div>`;
+  }
+
   // ════════════════════════════════════════════════════════════
   //  TEMPLATE DO RELATÓRIO
   //  Cada .slide = 1 página A4 landscape (297×210mm)
@@ -305,7 +388,7 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
     <span style="font-weight:700;color:${vpct > 0 ? '#C62828' : '#2E7D32'}">Variação: ${Math.abs(d.varPct)}% ${vpct > 0 ? 'acima' : 'abaixo'} do previsto</span>
     <span style="margin-left:auto;color:#9CA3AF;font-size:10.5px">Health Score: ${healthScore}/100 &nbsp;·&nbsp; EAC: ${fmoney(Math.round(eac))}</span>
   </div>
-  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">2 / 6</div></div>
+  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">2 / 7</div></div>
 </div>
 
 <!-- ═══════════ SLIDE 3 — STATUS DOS PRAZOS ═══════════ -->
@@ -333,7 +416,7 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
       ${bar(d.naoIniciados, d.total, '#E65100')}
     </div>
   </div>
-  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">3 / 6</div></div>
+  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">3 / 7</div></div>
 </div>
 
 <!-- ═══════════ SLIDE 4 — TABELA DE ATIVIDADES ═══════════ -->
@@ -358,10 +441,30 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
       <tbody>${tblRows}</tbody>
     </table>
   </div>
-  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">4 / 6</div></div>
+  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">4 / 7</div></div>
 </div>
 
-<!-- ═══════════ SLIDE 5 — RISCOS E INSIGHTS ═══════════ -->
+<!-- ═══════════ SLIDE 5 — CRONOGRAMA (GANTT) ═══════════ -->
+<div class="slide" style="background:#fff;padding-top:56px;padding-bottom:32px">
+  <div class="gold-stripe"></div>
+  <div class="hband">
+    <div class="hband-icon"><i class="fas fa-calendar-alt"></i></div>
+    <h2>Cronograma — Planejado vs Real</h2>
+    <div class="slide-badge">${d.rows.length} atividades</div>
+  </div>
+  <div style="padding:10px 28px 0">
+    <!-- Legenda -->
+    <div style="display:flex;gap:20px;align-items:center;margin-bottom:10px;font-size:10.5px;color:#6C757D">
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:14px;height:7px;background:rgba(11,30,51,0.22);border:1px solid rgba(11,30,51,0.4);border-radius:2px"></div> Previsto</div>
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:14px;height:7px;background:#0B1E33;border-radius:2px;opacity:0.88"></div> Real</div>
+      <div style="display:flex;align-items:center;gap:6px"><div style="width:2px;height:12px;background:#E74C3C;border-radius:1px"></div> Hoje</div>
+    </div>
+    ${buildGanttSlide(d.rows)}
+  </div>
+  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">5 / 7</div></div>
+</div>
+
+<!-- ═══════════ SLIDE 6 — RISCOS E INSIGHTS ═══════════ -->
 <div class="slide risk-slide">
   <div class="gold-stripe"></div>
   <div class="hband">
@@ -387,10 +490,10 @@ body{font-family:'Inter',sans-serif;background:#e8eaf0;color:#1A1F1E}
       <div class="rbox-text">${vpct > 10 ? `Custo <strong>${d.varPct}%</strong> acima — revisão de escopo urgente.` : vpct < 0 ? `Custo <strong>${Math.abs(d.varPct)}%</strong> abaixo — eficiência positiva.` : `Execução dentro dos parâmetros esperados (variação de ${Math.abs(d.varPct)}%).`}</div>
     </div>
   </div>
-  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">5 / 6</div></div>
+  <div class="slide-foot"><div class="brand"><i class="fas fa-chart-mixed"></i>Project Wagner BI</div><div class="pnum">6 / 7</div></div>
 </div>
 
-<!-- ═══════════ SLIDE 6 — ENCERRAMENTO ═══════════ -->
+<!-- ═══════════ SLIDE 7 — ENCERRAMENTO ═══════════ -->
 <div class="slide closing">
   <div class="closing-left">
     <div class="closing-obg">Obrigado.</div>
