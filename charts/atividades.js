@@ -72,16 +72,19 @@
       });
 
       // ── Plugin: linha vertical "Hoje" ─────────────────────────
-      const todayLabel = new Date().toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      // Usa índice numérico (YYYY-MM) em vez de label formatado
+      // para evitar variações de locale entre navegadores.
+      const now = new Date();
+      const todayKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      const todayIdx = allMonths.indexOf(todayKey);
 
       const todayLinePlugin = {
         id: 'todayLineAtv',
         afterDraw(chart) {
-          const idx = chart.data.labels.indexOf(todayLabel);
-          if (idx < 0) return;
+          if (todayIdx < 0) return;
           const meta = chart.getDatasetMeta(0);
-          if (!meta.data[idx]) return;
-          const x    = meta.data[idx].x;
+          if (!meta.data[todayIdx]) return;
+          const x    = meta.data[todayIdx].x;
           const ctx2 = chart.ctx;
           const { top, bottom } = chart.chartArea;
           ctx2.save();
