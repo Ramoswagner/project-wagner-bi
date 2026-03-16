@@ -321,7 +321,7 @@ window.exportToCSV = () => {
 
 // ── DADOS DE EXEMPLO ──────────────────────────────────────────────
 function loadSampleData() {
-  window.projectInfo = { nome:'Sistema de Gestão Municipal', responsavel:'Ana Lima', instituicao:'Prefeitura de Belo Horizonte' };
+  window.projectInfo = { nome:'Sistema de Gestão Municipal', responsavel:'Wagner Ramos', instituicao:'Prefeitura de Belo Horizonte' };
   document.getElementById('projectTitle').textContent    = window.projectInfo.nome;
   document.getElementById('projectSubtitle').textContent = `${window.projectInfo.responsavel} · ${window.projectInfo.instituicao}`;
   processData(`ID,Atividade,Responsável,Início Prev.,Término Prev.,Início Real,Término Real,Custo Prev.,Custo Real,Progresso
